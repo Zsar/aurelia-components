@@ -2,6 +2,8 @@
  * Caches the response of any promise value of a loading function and prevents duplicate calls
  * @author Mike Reiche <mike.reiche@t-systems.com>
  */
+import {tests} from "jest-same-file-tests";
+
 export class CacheService {
     private _cacheContainer = {};
     private _defaultCacheTtlSeconds = 10;
@@ -62,3 +64,41 @@ export class CacheService {
         return this;
     }
 }
+
+class Entry<T> {
+    private startOfLife: number | undefined
+    private value: T | undefined
+
+    constructor(source: Promise<T>) {
+        source.then(result => this.write(result))
+    }
+
+    destructor(): void {
+        delete this.startOfLife
+        delete this.value
+        this.write = undefined
+    }
+
+    read(): T | undefined {
+        return this.value
+    }
+
+    private write(result: T): void {
+        this.startOfLife = Date.now() / 1000 // in seconds
+        this.value = result
+    }
+}
+
+tests("Entry", () => {
+    it(".destructor turns .write into NOP", () => {
+        let writeHappens: (string) => void
+        const writePromise = new Promise<string>(resolve => writeHappens = resolve)
+
+        const entry = new Entry(writePromise)
+        entry.destructor()
+        writeHappens("You shan't see this!")
+
+        const value = entry.read()
+        expect(value).toBeUndefined()
+    })
+})
